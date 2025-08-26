@@ -1,0 +1,195 @@
+﻿AppType=JavaFX
+Build1=Default,b4j.example
+File1=Layout1.bjl
+FileGroup1=Default Group
+Group=Default Group
+Library1=jcore
+Library2=jfx
+NumberOfFiles=1
+NumberOfLibraries=2
+NumberOfModules=0
+Version=10.3
+@EndOfDesignText@
+#Region Project Attributes 
+	#MainFormWidth: 1024
+	#MainFormHeight: 800 
+#End Region
+
+Sub Process_Globals
+	Private fx As JFX
+	Private MainForm As Form
+	Private Canvas1 As Canvas
+	Private Timer1 As Timer
+	Private Stars As List
+	Private ConnectionLines As List
+	Private MouseX As Double = 0
+	Private MouseY As Double = 0
+	Private MaxConnections As Int = 50 ' Increased for better visual effect
+	Private StarSizeMin As Double = 0.5
+	Private StarSizeMax As Double = 3
+	Private StarSpeedMin As Double = 0.1
+	Private StarSpeedMax As Double = 0.5
+	Private ConnectionDistance As Double = 150 ' Maximum distance for connections
+	
+	Type StarType (x As Double, y As Double, size As Double, speed As Double, opacity As Double)
+	Type LineType (x1 As Double, y1 As Double, x2 As Double, y2 As Double, opacity As Double)
+End Sub
+
+Sub Globals
+
+End Sub
+
+Sub AppStart (Form1 As Form, Args() As String)
+	MainForm = Form1
+	MainForm.RootPane.LoadLayout("Layout1") 'Load the layout file if you have one, or create programmatically
+	MainForm.Show
+	
+	' Create Canvas programmatically
+	Canvas1.Initialize("Canvas1")
+	MainForm.RootPane.AddNode(Canvas1, 0, 0, MainForm.Width, MainForm.Height)
+	
+	' Initialize Timer
+	Timer1.Initialize("Timer1", 30) ' 30ms interval for smooth animation
+	Timer1.Enabled = True
+	
+	' Initialize Stars
+	InitStars
+End Sub
+
+
+
+Sub InitStars
+	Stars.Initialize
+	ConnectionLines.Initialize
+	
+	Dim NumStars As Int = 200 ' Adjust number of stars as needed
+	
+	For i = 0 To NumStars - 1
+		Dim sta As StarType
+		sta.Initialize
+		sta.x = Rnd(0, Canvas1.Width)
+		sta.y = Rnd(0, Canvas1.Height)
+		sta.size = Rnd(StarSizeMin * 100, StarSizeMax * 100) / 100
+		sta.speed = Rnd(StarSpeedMin * 100, StarSpeedMax * 100) / 100
+		sta.opacity = Rnd(30, 100) / 100 ' Random opacity for twinkling
+		Stars.Add(sta)
+	Next
+End Sub
+
+Sub Timer1_Tick
+	Draw
+End Sub
+
+Sub Draw
+	' Clear canvas
+	Canvas1.ClearRect(0, 0, Canvas1.Width, Canvas1.Height)
+	
+	' Set background
+	Canvas1.DrawRect(0, 0, Canvas1.Width, Canvas1.Height, fx.Colors.RGB(0, 0, 15), True, 1)
+	
+	' Update and draw stars
+	UpdateStars
+	DrawStars
+	
+	' Update and draw connections
+	UpdateConnections
+	DrawConnections
+End Sub
+
+Sub UpdateStars
+	For Each star As StarType In Stars
+		' Move stars slowly
+		star.y = star.y + star.speed
+		
+		' Wrap around when star goes off screen
+		If star.y > Canvas1.Height Then
+			star.y = -10
+			star.x = Rnd(0, Canvas1.Width)
+		End If
+		
+		' Twinkling effect
+		star.opacity = star.opacity + Rnd(-5, 5) / 100
+		If star.opacity > 1 Then star.opacity = 1
+		If star.opacity < 0.3 Then star.opacity = 0.3
+	Next
+End Sub
+
+Sub DrawStars
+	For Each sta As StarType In Stars
+		Dim color As Paint = fx.Colors.ARGB(sta.opacity * 255, 255, 255, 255)
+		Canvas1.DrawCircle(sta.x, sta.y, sta.size, color, True, 1)
+		
+		' Add glow effect for larger stars
+		If sta.size > 2 Then
+			Dim glowColor As Paint = fx.Colors.ARGB(sta.opacity * 50, 255, 255, 255)
+			Canvas1.DrawCircle(sta.x, sta.y, sta.size * 2, glowColor, True, 1)
+		End If
+	Next
+End Sub
+
+Sub UpdateConnections
+	ConnectionLines.Clear
+	
+	' Find stars near mouse position
+	If MouseX > 0 And MouseY > 0 Then
+		For Each sta As StarType In Stars
+			Dim distance As Double = Sqrt(Power(MouseX - sta.x, 2) + Power(MouseY - sta.y, 2))
+			
+			If distance < ConnectionDistance Then
+				Dim line As LineType
+				line.Initialize
+				line.x1 = MouseX
+				line.y1 = MouseY
+				line.x2 = sta.x
+				line.y2 = sta.y
+				line.opacity = (1 - distance / ConnectionDistance) * 0.5 ' Fade based on distance
+				ConnectionLines.Add(line)
+				
+				' Connect nearby stars to each other
+				For Each otherStar As StarType In Stars
+					If otherStar <> sta Then
+						Dim starDistance As Double = Sqrt(Power(sta.x - otherStar.x, 2) + Power(sta.y - otherStar.y, 2))
+						If starDistance < ConnectionDistance / 2 Then
+							Dim starLine As LineType
+							starLine.Initialize
+							starLine.x1 = sta.x
+							starLine.y1 = sta.y
+							starLine.x2 = otherStar.x
+							starLine.y2 = otherStar.y
+							starLine.opacity = (1 - starDistance / (ConnectionDistance / 2)) * 0.3
+							ConnectionLines.Add(starLine)
+						End If
+					End If
+				Next
+			End If
+		Next
+		
+		' Limit number of connections
+		Do While ConnectionLines.Size > MaxConnections
+			ConnectionLines.RemoveAt(ConnectionLines.Size - 1)
+		Loop
+	End If
+End Sub
+
+Sub DrawConnections
+	For Each lin As LineType In ConnectionLines
+		Dim color As Paint = fx.Colors.ARGB(lin.opacity * 255, 100, 200, 255) ' Light blue connections
+		Canvas1.DrawLine(lin.x1, lin.y1, lin.x2, lin.y2, color, 1)
+	Next
+End Sub
+
+Sub Canvas1_MouseMoved (EventData As MouseEvent)
+	MouseX = EventData.X
+	MouseY = EventData.Y
+End Sub
+
+Sub Canvas1_MouseExited (EventData As MouseEvent)
+	MouseX = -100 ' Move mouse position off screen to clear connections
+	MouseY = -100
+End Sub
+
+Sub MainForm_Resize (Width As Double, Height As Double)
+	Canvas1.Width = Width
+	Canvas1.Height = Height
+	InitStars ' Re-initialize stars when resizing
+End Sub
